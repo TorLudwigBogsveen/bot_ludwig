@@ -1,0 +1,13 @@
+[package]
+name = "BotLudwig"
+version = "0.1.0"
+authors = ["romptroll <romptroll@hotmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serenity = "0.8.7"
+yaml-rust = "0.4.4"
+random = "0.12.2"
+rddit_framework_2 = {git = "https://github.com/JohannesThoren/rddit_framework_2.0"}
