@@ -89,7 +89,7 @@ enum Token {
 }
 
 impl Token {
-    fn print(&self) {
+    fn _print(&self) {
         match self {
             Token::None => print!("None!"),
     

@@ -21,21 +21,53 @@
  *   SOFTWARE.
  */
 
-use std::process::{Command};
 use std::fs::*;
 use std::io::prelude::*;
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 mod math;
 mod perms;
 mod cmds;
-mod handler;
 mod user;
+mod reddit;
+mod music;
+mod spotify;
 
-use handler::Handler;
-use perms::{Permission, PermsAccount};
-use serenity::Client;
-use user::User;
+use serenity::client::{EventHandler, Context};
+use serenity::framework::standard::macros::group;
+use serenity::model::channel::Message;
+use serenity::model::prelude::Ready;
+use serenity::prelude::TypeMapKey;
+use songbird::SerenityInit;
+
+use serenity::{Client, async_trait};
+use serenity::framework::{
+    StandardFramework,
+};
+
+use crate::perms::PermsContainer;
+use crate::user::{load_users, save_users};
+use crate::music::{
+    PLAY_COMMAND,
+    LEAVE_COMMAND,
+    JOIN_COMMAND,
+    QUEUE_COMMAND,
+    SKIP_COMMAND
+};
+
+use crate::cmds::{
+    REDDIT_COMMAND,
+    HELP_COMMAND,
+    MATH_COMMAND,
+    CONVERSATIONS_COMMAND,
+    PERMS_COMMAND
+};
+
+use crate::spotify::{
+    SPOTIFY_TEST_COMMAND,
+    FIND_SONG_COMMAND,
+};
 
 fn load_answers() -> HashMap<String, String> {
     let mut answers = HashMap::new();
@@ -56,56 +88,69 @@ fn load_answers() -> HashMap<String, String> {
     answers
 }
 
-const LUDWIGS_SERVER: &str = "755492683417518281";
+/*const LUDWIGS_SERVER: &str = "755492683417518281";
 const KBM_SERVER:     &str = "436444150251126784";
-const KRABBANS_SERVER:&str = "220112575801589760";
+const KRABBANS_SERVER:&str = "220112575801589760";*/
 
-fn main() {
+pub struct AnswerContainer;
+
+impl TypeMapKey for AnswerContainer {
+    type Value = HashMap<String, String>;
+}
+
+pub struct Handler;
+
+#[async_trait]
+impl EventHandler for Handler {
+    async fn message(&self, _ctx: Context, _message: Message) {}
+
+    async fn ready(&self, _: Context, ready: Ready) {
+        println!("{} is connected!", ready.user.name);
+    }
+}
+
+#[group]
+#[commands(
+    join, leave, play, queue, skip, spotify_test, find_song
+)]
+struct Music;
+
+#[group]
+#[commands(
+    reddit, perms, conversations, math, help
+)]
+struct General;
+
+#[tokio::main]
+async fn main() {
     let answers = load_answers();
+    let users = load_users();
+    save_users(&users);
+    println!("\n\n{:?}\n\n", users);
+/* 
+    answers,
+    users: Arc::new(Mutex::new(users)),*/
+    let handler = Handler {};
 
-    let mut users = HashMap::new();
+    let framework = StandardFramework::new()
+    .configure(|c| c.prefix("-"))
+    .group(&GENERAL_GROUP)
+    .group(&MUSIC_GROUP);
 
-    let mut owner = PermsAccount::new();
-    owner.add(Permission::Owner);
+    let token = "NzU1NDM5ODA3MDM1MDgwODM1.X2DUJQ.c8EPPyAXHJUbGNljCqxvSP4RiQM";
+    let mut client = Client::builder(&token)
+    .event_handler(handler)
+    .framework(framework)
+    .register_songbird()
+    .await.expect("Err creating client");
 
-    let mut admin = PermsAccount::new();
-    admin.add(Permission::Admin);
+    {
+        let mut data = client.data.write().await;
+        data.insert::<AnswerContainer>(answers);
+        data.insert::<PermsContainer>(Arc::new(Mutex::new(users)));
+    }
 
-    let mut reddit = PermsAccount::new();
-    reddit.add(Permission::Reddit);
-
-    let mut tor = User::new();
-    tor.add_perms(String::from("*"), owner);
-
-    let mut jt = User::new();
-    jt.add_perms(String::from(KRABBANS_SERVER), admin.clone());
-
-    let mut turban = User::new();
-    turban.add_perms(String::from(KRABBANS_SERVER), admin.clone());
-    
-    let mut fia = User::new();
-    fia.add_perms(String::from(KRABBANS_SERVER), admin.clone());
-
-    let mut hadi = User::new();
-    hadi.add_perms(String::from(KRABBANS_SERVER), admin.clone());
-    
-    users.insert("Ludwig#9656".to_string(), tor);
-    users.insert("Krabban/MrCR4B#6604".to_string(), jt);
-    users.insert("Turban#8907".to_string(), turban);
-    users.insert("Fiaa#4523".to_string(), fia);
-    users.insert("hadi190#6025".to_string(), hadi);
-
-
-
-    let handler = Handler {
-        answers,
-        users,
-    };
-
-    let token = "NzU1NDM5ODA3MDM1MDgwODM1.X2DUJQ.RZhMd6hvnyqN5NE5TtGxhkoeec4";
-    let mut client = Client::new(&token, handler).expect("Err creating client");
-
-    if let Err(why) = client.start() {
+    if let Err(why) = client.start().await {
         println!("Client error: {:?}", why);
     }
 }

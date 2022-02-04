@@ -21,27 +21,41 @@
  *   SOFTWARE.
  */
 
-use std::{fs::{read_dir, remove_file}, process::Command};
+use serenity::{
+    client::{Context},
+    framework::{
+        standard::{
+            macros::{command},
+            CommandResult, Args,
+        },
+    },
+    model::{channel::Message},
+};
 
-use rddit_framework_2::url::Settings;
-use serenity::{client::Context, model::channel::Message};
-use crate::{handler::Handler, math};
+use crate::{math, reddit, user::{User, save_users}, perms::{Permission, PermsAccount, PermsContainer}, AnswerContainer};
 
-pub fn help(handler: &Handler, message: &mut Message, ctx: &mut Context) {
-    message.channel_id.send_message(&ctx.http, |m| {
+#[command]
+pub async fn help(ctx: &Context, msg: &Message) -> CommandResult {
+    let data = ctx.data.read().await;
+    let answers = data.get::<AnswerContainer>().unwrap();
+
+    msg.channel_id.send_message(&ctx.http, |m| {
         let mut help = String::new();
-        for kv in &handler.answers {
+        for kv in answers {
             help.push_str(kv.0);
             help.push_str("\n");
         }
         m.content(format!("
         Phrases:\n{}\n Matte: math/matte ekvation", help,
         )) 
-    }).unwrap();
+    }).await.unwrap();
+    Ok(())
 }
 
-pub fn reddit(_handler: &Handler, args: &[&str], message: &mut Message, ctx: &mut Context) {
-    message.channel_id.broadcast_typing(&ctx.http).unwrap();
+#[command]
+pub async fn reddit(ctx: &Context, message: &Message, mut args: Args) -> CommandResult {
+
+    message.channel_id.broadcast_typing(&ctx.http).await.unwrap();
 
     //const LIMIT: i32 = 10;
     //let mut count = 1;
@@ -53,101 +67,116 @@ pub fn reddit(_handler: &Handler, args: &[&str], message: &mut Message, ctx: &mu
     }*/
 
     let mut count = 1;
+    let mut sub = None;
+    let mut timespan = None;
+    let mut sorting = None;
 
-    let mut settings = Settings::new();
-
-    for mut i in 0..args.len() {
-        let arg = args[i];
-        i += 1;
-        match arg {
+    while !args.is_empty() {
+        let arg = args.single::<String>().unwrap();
+        //println!("{}", &arg);
+        match &arg as &str {
             "-s" => {
-                settings.subreddit = String::from(args[i]);
+                sub = Some(args.single::<String>().unwrap());
             }
             "-t" => {
-                settings.timespan = String::from(args[i]);
+                timespan = Some(args.single::<String>().unwrap());
             }
             "-k" => {
-                settings.sorting = String::from(args[i]);
+                sorting = Some(args.single::<String>().unwrap());
             }
             "-c" => {
-                count = args[i].parse().unwrap();
+                count = args.single::<u32>().unwrap();
                 if count > 10 {
                     count = 10;
                 }
             }
-            _ => { i -= 1 }
+            _ => {}
         }
     }
 
-    let posts = rddit_framework_2::post::data(&mut settings);
-    let images = rddit_framework_2::download::img_data(count, &posts);
+    let images = reddit::get_image_urls(sub, Some(count), sorting, timespan);
     
-    for img in images {
-        message.channel_id.send_message(&ctx.http, |m| m.content(format!("{}", img.url))).unwrap();
+    for img in images.await {
+        message.channel_id.send_message(&ctx.http, |m| m.content(format!("{}", img))).await.unwrap();
     }
-
-    /*let mut c = Command::new("reddit.exe");
-    for arg in args {
-        println!("{}", arg);
-        if *arg != "-f" {
-            c.arg(arg);
-        }
-    }
-
-    c.arg("-f").arg("memes/");
-    c.output().unwrap();*/
-
-    /*let mut paths = Vec::new();
-    for path in read_dir("memes").unwrap() {
-        let path = path.unwrap().path();
-        paths.push(path);
-    }
-
-    for path in &paths {
-        message.channel_id.broadcast_typing(&ctx.http).unwrap();
-        match message.channel_id.send_files(&ctx.http, vec![path], |m| m) {
-            Ok(_) => {},
-            Err(err) => {
-                message.channel_id.send_message(&ctx.http, |m| m.content(format!("{}", err))).unwrap();
-                println!("{}", err);
-
-            }
-        }
-        std::thread::sleep(std::time::Duration::from_millis(1000));
-    }                
-    
-    for path in paths {
-        remove_file(path).unwrap();
-    }*/
+    Ok(())
 }
 
-pub fn math(handler: &Handler, args: &[&str], message: &mut Message, ctx: &mut Context) {
+#[command]
+pub async fn math(ctx: &Context, message: &Message, mut args: Args) -> CommandResult {
     let mut equation = String::new();
-    for word in args {
-        equation.push_str(word);
+    for word in args.iter::<String>() {
+        //println!("{:?}", word);
+        equation.push_str(&word.unwrap());
     }
 
     equation = equation.replace(" ", "");
     let sum = math::TokenTree::new(&equation).sum();
-    message.channel_id.send_message(&ctx.http, |m| m.content(sum.to_string())).unwrap();
+    message.channel_id.send_message(&ctx.http, |m| m.content(sum.to_string())).await.unwrap();
+
+
+    Ok(())
 }
 
-pub fn perms(handler: &Handler, args: &[&str], message: &mut Message, ctx: &mut Context) {
-    /*match args[0] {
+#[command]
+pub async fn perms(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+    let data = ctx.data.read().await;
+    let users = data.get::<PermsContainer>().unwrap();
+    match &args.single::<String>().unwrap() as &str {
         "add" => {
+            let name = args.single::<String>().unwrap();
+            let perm = Permission::from(&args.single::<String>().unwrap() as &str);
+            let mut user = {
+                let lock = users.lock().unwrap();
+                let user = lock.get(&name);
+                let user = if let Some(user) = user {
+                    user.clone()
+                } else {
+                    User::new()
+                };
+                user
+            };
+            if let Some(server) = msg.guild_id {
+                let server = server.0.to_string();
+                if let Some(perms) = user.server_perms_mut(&server) {
+                    perms.add(perm);
+                } else {
+                    let mut perms = PermsAccount::new();
+                    perms.add(perm);
+                    user.add_perms(server, perms);
+                }
+            } else {
+                msg.channel_id.send_message(&ctx.http, |m| m.content("You have to be in a guild chat for this function to work")).await.unwrap();
+                return Ok(());
+            };
+            //println!("d{:?}", user);
+            {
+                let mut lock = users.lock().unwrap();
+                lock.insert(String::from(name), user);
+                save_users(&lock);
+            }
+            //lock.insert(String::from(name), user);
 
+            //save_users(&lock);
         }
         "remove" => {
 
-        }
-    }*/
+        },
+        _=>{}
+    }
+    Ok(())
 }
 
-pub fn conversations(handler: &Handler, cmd: &str, message: &mut Message, ctx: &mut Context) {
-    match handler.answers.get(&cmd.to_lowercase()) {
+#[command]
+pub async fn conversations(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+    let cmd = args.single::<String>().unwrap();
+    let data = ctx.data.read().await;
+    let answers = data.get::<AnswerContainer>().unwrap();
+    match answers.get(&cmd.to_lowercase()) {
         Some(answer) => {
-            message.channel_id.send_message(&ctx.http, |m| m.content(answer)).unwrap();
+            msg.channel_id.send_message(&ctx.http, |m| m.content(answer)).await.unwrap();
         }
         None => {}
     }
+    Ok(())
 }

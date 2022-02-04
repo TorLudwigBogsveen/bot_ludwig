@@ -21,7 +21,19 @@
  *   SOFTWARE.
  */
 
- #[derive(Clone, Copy, PartialEq)]
+use std::{sync::{Arc, Mutex}, collections::HashMap};
+
+use serenity::{prelude::TypeMapKey};
+
+use crate::user::User;
+
+pub struct PermsContainer;
+
+impl TypeMapKey for PermsContainer {
+    type Value = Arc<Mutex<HashMap<String, User>>>;
+}
+
+ #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Permission {
     Owner,
     Admin,
@@ -31,7 +43,34 @@ pub enum Permission {
     Help,
 }
 
-#[derive(Clone)]
+impl From<&str> for Permission {
+    fn from(s: &str) -> Self {
+        match s { 
+            "Owner" => Permission::Owner,
+            "Admin" => Permission::Admin,
+            "Reddit"=> Permission::Reddit,
+            "Conversation"=> Permission::Conversation,
+            "Math"=> Permission::Math,
+            "Help"=> Permission::Help,
+            _=>panic!("INVALID PERMISSION!!!"),
+        }
+    }
+}
+
+impl From<Permission> for &str {
+    fn from(permission: Permission) -> Self {
+        match permission { 
+            Permission::Owner => "Owner",
+            Permission::Admin => "Admin",
+            Permission::Reddit => "Reddit",
+            Permission::Conversation => "Conversation",
+            Permission::Math => "Math",
+            Permission::Help => "Help",
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct PermsAccount {
     pub perms: Vec<Permission>,
 }
