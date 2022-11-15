@@ -7,11 +7,12 @@ edition = "2018"
 
 [dependencies]
 yaml-rust = "0.4.4"
-random = "0.12.2"
+random = "*"
 reqwest = "*"
 serde_json = "*"
-songbird = { version = "0.2.1", features = ["builtin-queue"]}
-rspotify = "0.11.3"
+songbird = { version = "*", features = ["builtin-queue"]}
+rspotify = "*"
+lib-rddit-v3 = { git = "https://git.lgjt.xyz/Johannes/lib-rddit.git" }
 
 
 [dependencies.tokio]
@@ -33,5 +34,5 @@ features = [
     "standard_framework",
     "voice",
 ]
-version = "0.10"
+version = "*"
 

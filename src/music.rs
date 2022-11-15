@@ -36,7 +36,7 @@ use songbird::{input::ytdl_search};
 
 #[command]
 pub async fn join(ctx: &Context, msg: &Message) -> CommandResult {
-    let guild = msg.guild(&ctx.cache).await.unwrap();
+    let guild = msg.guild(&ctx.cache).unwrap();
     let guild_id = guild.id;
 
     let channel_id = guild
@@ -60,7 +60,7 @@ pub async fn join(ctx: &Context, msg: &Message) -> CommandResult {
 
 #[command]
 pub async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
-    let guild = msg.guild(&ctx.cache).await.unwrap();
+    let guild = msg.guild(&ctx.cache).unwrap();
     let guild_id = guild.id;
 
     let manager = songbird::get(ctx).await
@@ -83,7 +83,7 @@ pub async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
 pub async fn play(ctx: &Context, msg: &Message, args: Args) -> CommandResult {    
     let url = args.rest();
 
-    let guild = msg.guild(&ctx.cache).await.unwrap();
+    let guild = msg.guild(&ctx.cache).unwrap();
     let guild_id = guild.id;
 
     let manager = songbird::get(ctx).await
@@ -91,7 +91,6 @@ pub async fn play(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 
     if let Some(handler_lock) = manager.get(guild_id) {
         let mut handler = handler_lock.lock().await;
-
         let source = if url.starts_with("http") {
             match songbird::ytdl(&url).await {
                 Ok(source) => source,
@@ -133,7 +132,7 @@ pub async fn skip(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
         1
     };
 
-    let guild = msg.guild(&ctx.cache).await.unwrap();
+    let guild = msg.guild(&ctx.cache).unwrap();
     let guild_id = guild.id;
 
     let manager = songbird::get(ctx).await
@@ -163,7 +162,7 @@ pub async fn skip(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 
 #[command]
 pub async fn queue(ctx: &Context, msg: &Message) -> CommandResult {
-    let guild = msg.guild(&ctx.cache).await.unwrap();
+    let guild = msg.guild(&ctx.cache).unwrap();
     let guild_id = guild.id;
 
     let manager = songbird::get(ctx).await

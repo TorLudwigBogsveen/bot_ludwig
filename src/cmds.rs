@@ -21,6 +21,7 @@
  *   SOFTWARE.
  */
 
+use lib_rddit_v3::{url_builder, http};
 use serenity::{
     client::{Context},
     framework::{
@@ -70,11 +71,15 @@ pub async fn reddit(ctx: &Context, message: &Message, mut args: Args) -> Command
     let mut sub = None;
     let mut timespan = None;
     let mut sorting = None;
+    let mut content_type = String::from("image");
 
     while !args.is_empty() {
         let arg = args.single::<String>().unwrap();
         //println!("{}", &arg);
         match &arg as &str {
+            "-i" => {
+                content_type = args.single::<String>().unwrap();
+            }
             "-s" => {
                 sub = Some(args.single::<String>().unwrap());
             }
@@ -94,10 +99,37 @@ pub async fn reddit(ctx: &Context, message: &Message, mut args: Args) -> Command
         }
     }
 
-    let images = reddit::get_image_urls(sub, Some(count), sorting, timespan);
+    let limit = 40;
+    let sub         =  if let Some(sub) = sub { sub } else { String::from("dankmemes") };
+    let sorting         =  if let Some(sorting) = sorting { sorting } else { String::from("new") };
+    let timespan    =  if let Some(timespan) = timespan { timespan } else { String::from("day") };
+    let ub = url_builder::URLBuilder::new(
+        sub,
+        Some(url_builder::Sorting::from_string(sorting.to_lowercase())),
+        Some(limit),
+    );
+    let posts = http::fetch(ub.build()).await;
     
-    for img in images.await {
-        message.channel_id.send_message(&ctx.http, |m| m.content(format!("{}", img))).await.unwrap();
+    for post in posts {
+        if count == 0 {
+            return Ok(())
+        }
+
+        if &content_type == "image" {
+            if post.data.post_hint.as_ref().unwrap() == "image" {
+                message.channel_id.send_message(&ctx.http, |m| m.content(format!("{}", post.data.url.clone()))).await.unwrap();
+                count -= 1;
+            }
+        } else if &content_type == "text" {
+            let text = post.data.selftext.unwrap().chars().collect::<Vec<char>>();
+            for i in 0..(text.len() / 2000) {
+                let stop = 2000.min(text.len() - i * 2000);
+                let part = text[(i*2000)..stop].iter().collect::<String>();
+                message.channel_id.send_message(&ctx.http, |m| m.content(format!("{:?}", part))).await.unwrap();
+            }
+            //message.channel_id.send_message(&ctx.http, |m| m.content(format!("{}", post.selftext))).await.unwrap();
+            count -= 1;
+        }
     }
     Ok(())
 }

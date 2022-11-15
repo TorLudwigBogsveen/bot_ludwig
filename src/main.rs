@@ -38,7 +38,7 @@ use serenity::client::{EventHandler, Context};
 use serenity::framework::standard::macros::group;
 use serenity::model::channel::Message;
 use serenity::model::prelude::Ready;
-use serenity::prelude::TypeMapKey;
+use serenity::prelude::{TypeMapKey, GatewayIntents};
 use songbird::SerenityInit;
 
 use serenity::{Client, async_trait};
@@ -137,8 +137,9 @@ async fn main() {
     .group(&GENERAL_GROUP)
     .group(&MUSIC_GROUP);
 
-    let token = "NzU1NDM5ODA3MDM1MDgwODM1.X2DUJQ.c8EPPyAXHJUbGNljCqxvSP4RiQM";
-    let mut client = Client::builder(&token)
+    let token = "NzU1NDM5ODA3MDM1MDgwODM1.X2DUJQ.r3xpo09dyOWXaqQUpifuzgcy_18";
+    let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT | GatewayIntents::GUILD_VOICE_STATES;
+    let mut client = Client::builder(&token, intents)
     .event_handler(handler)
     .framework(framework)
     .register_songbird()
