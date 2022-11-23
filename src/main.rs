@@ -21,7 +21,7 @@
  *   SOFTWARE.
  */
 
-use std::fs::*;
+/*use std::fs::*;
 use std::io::prelude::*;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -35,10 +35,12 @@ mod music;
 mod spotify;
 
 use serenity::client::{EventHandler, Context};
+use serenity::framework::standard::CommandGroup;
 use serenity::framework::standard::macros::group;
-use serenity::model::channel::Message;
-use serenity::model::prelude::Ready;
-use serenity::prelude::{TypeMapKey, GatewayIntents};
+use serenity::model::prelude::command::CommandOptionType;
+use serenity::model::prelude::interaction::application_command::CommandDataOption;
+use serenity::model::{channel::Message, prelude::{Ready, GuildId, InteractionResponseType}, application::{command::Command, interaction::Interaction}};
+use serenity::prelude::*;
 use songbird::SerenityInit;
 
 use serenity::{Client, async_trait};
@@ -104,8 +106,75 @@ pub struct Handler;
 impl EventHandler for Handler {
     async fn message(&self, _ctx: Context, _message: Message) {}
 
-    async fn ready(&self, _: Context, ready: Ready) {
+    async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
+        println!("{:?}", interaction);
+        
+        /*if let Interaction::ApplicationCommand(command) = interaction {
+            println!("Received command interaction: {:#?}", command);
+
+            println!("{:?}", command.data.options);
+            println!("DDD: {:?}", interaction.message_component().unwrap().message);
+
+            let content = match command.data.name.as_str() {
+                _ => "not implemented :(".to_string(),
+            };
+            /*for c in GENERAL_GROUP.options.commands {
+                if (c.options.names[0] == command.data.name.as_str()) {
+                    println!("{}\n", c.options.names[0]);
+                    (c.fun)(&ctx, Message {});
+                }
+            }
+            for c in MUSIC_GROUP.options.commands {
+                if (c.options.names[0] == command.data.name.as_str()) {
+                    println!("{}\n", c.options.names[0]);
+                }
+            }*/
+
+            if let Err(why) = command
+                .create_interaction_response(&ctx.http, |response| {
+                    response
+                        .kind(InteractionResponseType::ChannelMessageWithSource)
+                        .interaction_response_data(|message| message.content(content))
+                })
+                .await
+            {
+                println!("Cannot respond to slash command: {}", why);
+            }
+        }*/
+    }
+
+    async fn ready(&self, ctx: Context, ready: Ready) {
         println!("{} is connected!", ready.user.name);
+
+        //let guild_id = GuildId(436444150251126784);//KBM
+        let guild_id = GuildId(755492683417518281);
+
+        //let commands = Command::set_global_application_commands(&ctx.http, |commands| {
+        let commands = GuildId::set_application_commands(&guild_id, &ctx.http, |commands| {
+            let mut commands = commands;
+            for c in GENERAL_GROUP.options.commands {
+                commands.create_application_command(|command| command.name(c.options.names[0]).description("description"));
+            }
+            
+            for c in MUSIC_GROUP.options.commands {
+                commands = commands.create_application_command(|command| command
+                    .name(c.options.names[0])
+                    .description("description")
+                    .create_option(|option| {
+                        option
+                            .name("input")
+                            .description("description")
+                            .kind(CommandOptionType::String)
+                            .required(true)
+                    }
+                    ));
+            }
+            commands
+        }).await;
+
+        println!("I now have the following guild slash commands: {:#?}", commands);
+
+        //println!("I created the following global slash command: {:#?}", guild_command);
     }
 }
 
@@ -137,14 +206,14 @@ async fn main() {
     .group(&GENERAL_GROUP)
     .group(&MUSIC_GROUP);
 
-    let token = "NzU1NDM5ODA3MDM1MDgwODM1.X2DUJQ.r3xpo09dyOWXaqQUpifuzgcy_18";
+    let token = std::env::var("DISCORD_BOT_TOKEN").unwrap();
     let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT | GatewayIntents::GUILD_VOICE_STATES;
     let mut client = Client::builder(&token, intents)
     .event_handler(handler)
     .framework(framework)
     .register_songbird()
     .await.expect("Err creating client");
-
+    
     {
         let mut data = client.data.write().await;
         data.insert::<AnswerContainer>(answers);
@@ -152,6 +221,50 @@ async fn main() {
     }
 
     if let Err(why) = client.start().await {
+        println!("Client error: {:?}", why);
+    }
+}*/
+
+mod music;
+mod spotify;
+
+use music::*;
+use spotify::*;
+
+use poise::{serenity_prelude as serenity, PrefixFrameworkOptions};
+use songbird::SerenityInit;
+
+
+pub struct Handler;
+
+pub struct Data {} // User data, which is stored and accessible in all command invocations
+pub type Error = Box<dyn std::error::Error + Send + Sync>;
+pub type Context<'a> = poise::Context<'a, Data, Error>;
+
+#[poise::command(prefix_command)]
+pub async fn register(ctx: Context<'_>) -> Result<(), Error> {
+    poise::builtins::register_application_commands_buttons(ctx).await?;
+    Ok(())
+}
+
+#[tokio::main]
+async fn main() {
+    let intents = serenity::GatewayIntents::non_privileged() | serenity::GatewayIntents::MESSAGE_CONTENT | serenity::GatewayIntents::GUILD_VOICE_STATES;
+    let mut prefix = PrefixFrameworkOptions::default();
+    prefix.prefix = Some(String::from("-"));
+
+    let framework = poise::Framework::builder()
+        .options(poise::FrameworkOptions {
+            commands: vec![register(), join(), play(), skip(), queue(), leave(), find_song(), spotify_test(), spotify_playlist()],
+            prefix_options: prefix,
+            ..Default::default()
+        })
+        .token(std::env::var("DISCORD_BOT_TOKEN").expect("missing DISCORD_TOKEN"))
+        .intents(intents)
+        .client_settings(|builder| builder.register_songbird())
+        .user_data_setup(move |_ctx, _ready, _framework| Box::pin(async move { Ok(Data {}) }));
+
+    if let Err(why) = framework.run().await {
         println!("Client error: {:?}", why);
     }
 }

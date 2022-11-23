@@ -1,32 +1,68 @@
-use rspotify::{ClientCredsSpotify, Credentials, clients::BaseClient};
-use serenity::{framework::standard::{macros::command, CommandResult, Args}, model::channel::Message, client::Context, };
+use poise::futures_util::{TryStreamExt, StreamExt};
+use rspotify::{ClientCredsSpotify, Credentials, clients::BaseClient, model::{PlaylistItem, PlaylistId}, prelude::Id};
+
+use crate::{Context, Error, music::internal_play_many};
 
 const ID: &str = "604111fe6a2d4ce880876b857bc6087b";
 const SECRET: &str = "4c0be7d9af594303a21f5978d59dca94";
 
-#[command]
-pub async fn spotify_test() -> CommandResult {
+#[poise::command(slash_command, prefix_command)]
+pub async fn spotify_test(
+    _ctx: Context<'_>,
+) -> Result<(), Error> {
     let mut spotify = ClientCredsSpotify::new(Credentials::new(ID, SECRET));
     spotify.request_token().await.unwrap();
     println!("{:?}", spotify);
     Ok(())
 }
 
-#[command]
-pub async fn find_song(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+
+#[poise::command(slash_command, prefix_command)]
+pub async fn find_song(
+    _ctx: Context<'_>,
+    #[description = "Song title"] song: String,
+) -> Result<(), Error> {
     let mut spotify = ClientCredsSpotify::new(Credentials::new(ID, SECRET));
-    spotify.request_token().await.unwrap();
+    spotify.request_token().await?;
 
     let result = spotify.search(
-        &args.single::<String>().unwrap(),
+        &song,
         &rspotify::model::SearchType::Track,
         None,
         None,
         Some(1),
         Some(0),
-    ).await.unwrap();
+    ).await?;
 
     println!("{:?}", result);
+
+    Ok(())
+}
+
+#[poise::command(slash_command, prefix_command)]
+pub async fn spotify_playlist(
+    ctx: Context<'_>,
+    #[description = "Playlist link"] playlist: String,
+) -> Result<(), Error> {
+    let mut spotify = ClientCredsSpotify::new(Credentials::new(ID, SECRET));
+    spotify.request_token().await?;
+
+    println!("[{}]", playlist);
+
+    let id = PlaylistId::from_id(&playlist)?;
+    let playlist = spotify.playlist(&id, None, None).await?;
+    let mut tracks = vec![];
+    for track in playlist.tracks.items {
+        match track.track.unwrap() {
+            rspotify::model::PlayableItem::Track(track) => {
+                //println!("{}", track.name);
+                tracks.push(track.name);
+            },
+            rspotify::model::PlayableItem::Episode(_) => todo!(),
+        }
+    }
+
+    internal_play_many(ctx, tracks).await?;
 
     Ok(())
 }

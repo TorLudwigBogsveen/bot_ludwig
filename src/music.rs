@@ -20,73 +20,141 @@
  *   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  *   SOFTWARE.
  */
-
-use serenity::{
-    client::{Context},
-    framework::{
-        standard::{
-            macros::{command},
-            CommandResult, Args,
-        },
-    },
-    model::{channel::Message},
-};
-
 use songbird::{input::ytdl_search};
 
-#[command]
-pub async fn join(ctx: &Context, msg: &Message) -> CommandResult {
-    let guild = msg.guild(&ctx.cache).unwrap();
+use crate::{Context, Error};
+
+async fn internal_join(
+    ctx: Context<'_>,
+) -> Result<(), Error> {
+    let guild = ctx.guild().unwrap();
     let guild_id = guild.id;
 
     let channel_id = guild
-        .voice_states.get(&msg.author.id)
+        .voice_states.get(&ctx.author().id)
         .and_then(|voice_state| voice_state.channel_id);
 
     let connect_to = match channel_id {
         Some(channel) => channel,
         None => {
-            msg.reply(ctx, "Not in a voice channel").await.unwrap();
+            ctx.say("Not in a voice channel").await.unwrap();
             return Ok(());
         }
     };
 
-    let manager = songbird::get(ctx).await
+    let manager = songbird::get(ctx.discord()).await
         .expect("Songbird Voice client placed in at initialisation.").clone();
 
     let _handler = manager.join(guild_id, connect_to).await;
+
+    ctx.say(&format!("Joined voice channel")).await.unwrap();
     Ok(())
 }
 
-#[command]
-pub async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
-    let guild = msg.guild(&ctx.cache).unwrap();
+#[poise::command(slash_command, prefix_command)]
+pub async fn join(
+    ctx: Context<'_>,
+) -> Result<(), Error> {
+    internal_join(ctx).await
+}
+    
+
+#[poise::command(slash_command, prefix_command)]
+pub async fn leave(
+    ctx: Context<'_>,
+) -> Result<(), Error> {
+    let guild = ctx.guild().unwrap();
     let guild_id = guild.id;
 
-    let manager = songbird::get(ctx).await
+    let manager = songbird::get(ctx.discord()).await
         .expect("Songbird Voice client placed in at initialisation.").clone();
     let has_handler = manager.get(guild_id).is_some();
 
     if has_handler {
         if let Err(e) = manager.remove(guild_id).await {
-            msg.channel_id.say(&ctx.http, format!("Failed: {:?}", e)).await.unwrap();
+            ctx.say(format!("Failed: {:?}", e)).await.unwrap();
         }
 
-        msg.channel_id.say(&ctx.http, "Left voice channel").await.unwrap();
+        ctx.say("Left voice channel").await.unwrap();
     } else {
-        msg.reply(ctx, "Not in a voice channel").await.unwrap();
+        ctx.say("Not in a voice channel").await.unwrap();
     }
     Ok(())
 }
 
-#[command]
-pub async fn play(ctx: &Context, msg: &Message, args: Args) -> CommandResult {    
-    let url = args.rest();
-
-    let guild = msg.guild(&ctx.cache).unwrap();
+pub async fn internal_play_many(
+    ctx: Context<'_>,
+    songs: Vec<String>,
+) -> Result<(), Error> {
+    let guild = ctx.guild().unwrap();
     let guild_id = guild.id;
 
-    let manager = songbird::get(ctx).await
+    let manager = songbird::get(ctx.discord()).await
+        .expect("Songbird Voice client placed in at initialisation.").clone();
+    let has_handler = manager.get(guild_id).is_some();
+    if !has_handler {
+        internal_join(ctx).await.unwrap();
+    }
+
+    let manager = songbird::get(ctx.discord()).await
+        .expect("Songbird Voice client placed in at initialisation.").clone();
+
+    if let Some(handler_lock) = manager.get(guild_id) {
+        let mut handler = handler_lock.lock().await;
+        for url in &songs {
+            let source = if url.starts_with("http") {
+                match songbird::ytdl(&url).await {
+                    Ok(source) => source,
+                    Err(why) => {
+                        println!("Err starting source: {:?}", why);
+
+                        ctx.say("Error sourcing ffmpeg").await.unwrap();
+
+                        return Ok(());
+                    },
+                }
+            } else {
+                //println!("url:{}", &url);
+                match ytdl_search(&url).await {
+                    Ok(source) => source,
+                    Err(why) => {
+                        println!("Err starting source: {:?}", why);
+
+                        ctx.say("Error sourcing ffmpeg").await.unwrap();
+
+                        return Ok(());
+                    },
+                }
+            };
+            handler.enqueue_source(source);
+
+            //ctx.say(&format!("Added \"{}\" to the queue.\n{}", title, url)).await.unwrap();
+        }
+    } else {
+        ctx.say("Not in a voice channel to play in").await.unwrap();
+    }
+    ctx.say(&format!("Added {} songs to the queue.", songs.len())).await.unwrap();
+    Ok(())
+}
+
+#[poise::command(slash_command, prefix_command)]
+pub async fn play(
+    ctx: Context<'_>,
+    #[description = "Song title or yt-link"] song: String,
+) -> Result<(), Error> {
+    let url = song;
+
+    let guild = ctx.guild().unwrap();
+    let guild_id = guild.id;
+
+    let manager = songbird::get(ctx.discord()).await
+        .expect("Songbird Voice client placed in at initialisation.").clone();
+    let has_handler = manager.get(guild_id).is_some();
+    if !has_handler {
+        internal_join(ctx).await.unwrap();
+    }
+
+    let manager = songbird::get(ctx.discord()).await
         .expect("Songbird Voice client placed in at initialisation.").clone();
 
     if let Some(handler_lock) = manager.get(guild_id) {
@@ -97,7 +165,7 @@ pub async fn play(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
                 Err(why) => {
                     println!("Err starting source: {:?}", why);
 
-                    msg.channel_id.say(&ctx.http, "Error sourcing ffmpeg").await.unwrap();
+                    ctx.say("Error sourcing ffmpeg").await.unwrap();
 
                     return Ok(());
                 },
@@ -109,33 +177,39 @@ pub async fn play(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
                 Err(why) => {
                     println!("Err starting source: {:?}", why);
 
-                    msg.channel_id.say(&ctx.http, "Error sourcing ffmpeg").await.unwrap();
+                    ctx.say("Error sourcing ffmpeg").await.unwrap();
 
                     return Ok(());
                 },
             }
         };
+        let url = source.metadata.source_url.as_ref().unwrap().clone();
+        let title = source.metadata.title.as_ref().unwrap().clone();
         handler.enqueue_source(source);
 
-        msg.channel_id.say(&ctx.http, "Playing song").await.unwrap();
+        ctx.say(&format!("Added \"{}\" to the queue.\n{}", title, url)).await.unwrap();
     } else {
-        msg.channel_id.say(&ctx.http, "Not in a voice channel to play in").await.unwrap();
+        ctx.say("Not in a voice channel to play in").await.unwrap();
     }
     Ok(())
 }
 
-#[command]
-pub async fn skip(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let amount = if let Ok(num) = args.single::<usize>() {
+
+#[poise::command(slash_command, prefix_command)]
+pub async fn skip(
+    ctx: Context<'_>,
+    #[description="Amount of songs to skip"] amount: Option<usize>,
+) -> Result<(), Error> {
+    let amount = if let Some(num) = amount {
        num
     } else {
         1
     };
 
-    let guild = msg.guild(&ctx.cache).unwrap();
+    let guild = ctx.guild().unwrap();
     let guild_id = guild.id;
 
-    let manager = songbird::get(ctx).await
+    let manager = songbird::get(ctx.discord()).await
         .expect("Songbird Voice client placed in at initialisation.").clone();
 
     if let Some(handler_lock) = manager.get(guild_id) {
@@ -152,20 +226,23 @@ pub async fn skip(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
         }
 
 
-        msg.channel_id.say(&ctx.http, &format!("Skipping {} songs", num_skipped_tracks)).await.unwrap();
+        ctx.say(&format!("Skipping {} songs", num_skipped_tracks)).await.unwrap();
     } else {
-        msg.channel_id.say(&ctx.http, "Not playing any songs able to skip").await.unwrap();
+        ctx.say("Not playing any songs able to skip").await.unwrap();
     }
 
     Ok(())
 }
 
-#[command]
-pub async fn queue(ctx: &Context, msg: &Message) -> CommandResult {
-    let guild = msg.guild(&ctx.cache).unwrap();
+
+#[poise::command(slash_command, prefix_command)]
+pub async fn queue(
+    ctx: Context<'_>,
+) -> Result<(), Error> {
+    let guild = ctx.guild().unwrap();
     let guild_id = guild.id;
 
-    let manager = songbird::get(ctx).await
+    let manager = songbird::get(ctx.discord()).await
         .expect("Songbird Voice client placed in at initialisation.").clone();
 
     if let Some(handler_lock) = manager.get(guild_id) {
@@ -173,15 +250,16 @@ pub async fn queue(ctx: &Context, msg: &Message) -> CommandResult {
         
         let tracks = handler.queue().current_queue()
         .iter()
-        .map(|track| 
-            format!("{}\n", track.metadata().track.as_ref().unwrap())
+        .enumerate()
+        .map(|(i, track)| 
+            format!("{}\t:\t\"{}\"\n", i+1, track.metadata().title.as_ref().unwrap())
         )
         .collect::<Vec<String>>().concat();
 
-
-        msg.channel_id.say(&ctx.http, &tracks).await.unwrap();
+        
+        ctx.say(&format!("```Nth\t:\tTitle\n{}```", tracks)).await.unwrap();
     } else {
-        msg.channel_id.say(&ctx.http, "Not playing any songs").await.unwrap();
+        ctx.say("Not playing any songs").await.unwrap();
     }
     Ok(())
 }

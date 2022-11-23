@@ -12,7 +12,8 @@ reqwest = "*"
 serde_json = "*"
 songbird = { version = "*", features = ["builtin-queue"]}
 rspotify = "*"
-lib-rddit-v3 = { git = "https://git.lgjt.xyz/Johannes/lib-rddit.git" }
+#lib-rddit-v3 = { git = "https://git.lgjt.xyz/Johannes/lib-rddit.git" }
+poise = "0.4.1"
 
 
 [dependencies.tokio]
@@ -31,7 +32,7 @@ features = [
     "model",
     "utils",
     "rustls_backend",
-    "standard_framework",
+    #"standard_framework",
     "voice",
 ]
 version = "*"
