@@ -102,7 +102,7 @@ pub async fn internal_play_many(
     if let Some(handler_lock) = manager.get(guild_id) {
         let mut handler = handler_lock.lock().await;
         for url in &songs {
-            let source = if url.starts_with("http") {
+            let source = if url.starts_with("http") || url.starts_with("https") {
                 match songbird::ytdl(&url).await {
                     Ok(source) => source,
                     Err(why) => {
@@ -159,7 +159,7 @@ pub async fn play(
 
     if let Some(handler_lock) = manager.get(guild_id) {
         let mut handler = handler_lock.lock().await;
-        let source = if url.starts_with("http") {
+        let source = if url.starts_with("http") || url.starts_with("https") {
             match songbird::ytdl(&url).await {
                 Ok(source) => source,
                 Err(why) => {
