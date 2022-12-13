@@ -47,6 +47,7 @@ async fn internal_join(
 
     let _handler = manager.join(guild_id, connect_to).await;
 
+    println!("{} used join", ctx.author().name);
     ctx.say(&format!("Joined voice channel")).await.unwrap();
     Ok(())
 }
@@ -75,6 +76,7 @@ pub async fn leave(
             ctx.say(format!("Failed: {:?}", e)).await.unwrap();
         }
 
+        println!("{} used leave", ctx.author().name);
         ctx.say("Left voice channel").await.unwrap();
     } else {
         ctx.say("Not in a voice channel").await.unwrap();
@@ -163,7 +165,7 @@ pub async fn play(
             match songbird::ytdl(&url).await {
                 Ok(source) => source,
                 Err(why) => {
-                    println!("Err starting source: {:?}", why);
+                    println!("Err starting source, url: \"{}\", reason: {:?}", &url, why);
 
                     ctx.say("Error sourcing ffmpeg").await.unwrap();
 
@@ -171,11 +173,10 @@ pub async fn play(
                 },
             }
         } else {
-            //println!("url:{}", &url);
             match ytdl_search(&url).await {
                 Ok(source) => source,
                 Err(why) => {
-                    println!("Err starting source: {:?}", why);
+                    println!("Err starting source, url: \"{}\", reason: {:?}", &url, why);
 
                     ctx.say("Error sourcing ffmpeg").await.unwrap();
 
@@ -187,6 +188,7 @@ pub async fn play(
         let title = source.metadata.title.as_ref().unwrap().clone();
         handler.enqueue_source(source);
 
+        println!("{} added \"{}\" to the queue{}", ctx.author().name, title, url);
         ctx.say(&format!("Added \"{}\" to the queue.\n{}", title, url)).await.unwrap();
     } else {
         ctx.say("Not in a voice channel to play in").await.unwrap();
@@ -214,18 +216,13 @@ pub async fn skip(
 
     if let Some(handler_lock) = manager.get(guild_id) {
         let handler = handler_lock.lock().await;
-        let num_skipped_tracks = if amount < handler.queue().len() {
-            amount
-        } else {
-            handler.queue().len()
-        };
+        let num_skipped_tracks = amount.min(handler.queue().len());
 
-
-        for _i in 0..amount { 
+        for _i in 0..num_skipped_tracks { 
            handler.queue().skip().unwrap();
         }
 
-
+        println!("{} skipped {} songs", ctx.author().name, num_skipped_tracks);
         ctx.say(&format!("Skipping {} songs", num_skipped_tracks)).await.unwrap();
     } else {
         ctx.say("Not playing any songs able to skip").await.unwrap();
@@ -256,7 +253,7 @@ pub async fn queue(
         )
         .collect::<Vec<String>>().concat();
 
-        
+        println!("{} used queue\n```Nth\t:\tTitle\n{}```", ctx.author().name, tracks);
         ctx.say(&format!("```Nth\t:\tTitle\n{}```", tracks)).await.unwrap();
     } else {
         ctx.say("Not playing any songs").await.unwrap();
