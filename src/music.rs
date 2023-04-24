@@ -24,9 +24,13 @@ use songbird::{input::ytdl_search};
 
 use crate::{Context, Error};
 
-async fn internal_join(
+pub async fn internal_join(
     ctx: Context<'_>,
 ) -> Result<(), Error> {
+    println!("{} used join", ctx.author().name);
+    ctx.say("Trying to join voice channel").await?;
+
+
     let guild = ctx.guild().unwrap();
     let guild_id = guild.id;
 
@@ -37,7 +41,7 @@ async fn internal_join(
     let connect_to = match channel_id {
         Some(channel) => channel,
         None => {
-            ctx.say("Not in a voice channel").await.unwrap();
+            ctx.say("Not in a voice channel").await?;
             return Ok(());
         }
     };
@@ -47,8 +51,8 @@ async fn internal_join(
 
     let _handler = manager.join(guild_id, connect_to).await;
 
-    println!("{} used join", ctx.author().name);
-    ctx.say(&format!("Joined voice channel")).await.unwrap();
+    ctx.say("Joined voice channel").await?;
+
     Ok(())
 }
 
@@ -64,6 +68,8 @@ pub async fn join(
 pub async fn leave(
     ctx: Context<'_>,
 ) -> Result<(), Error> {
+    println!("{} used leave", ctx.author().name);
+
     let guild = ctx.guild().unwrap();
     let guild_id = guild.id;
 
@@ -75,8 +81,7 @@ pub async fn leave(
         if let Err(e) = manager.remove(guild_id).await {
             ctx.say(format!("Failed: {:?}", e)).await.unwrap();
         }
-
-        println!("{} used leave", ctx.author().name);
+        
         ctx.say("Left voice channel").await.unwrap();
     } else {
         ctx.say("Not in a voice channel").await.unwrap();
@@ -155,9 +160,6 @@ pub async fn play(
     if !has_handler {
         internal_join(ctx).await.unwrap();
     }
-
-    let manager = songbird::get(ctx.discord()).await
-        .expect("Songbird Voice client placed in at initialisation.").clone();
 
     if let Some(handler_lock) = manager.get(guild_id) {
         let mut handler = handler_lock.lock().await;

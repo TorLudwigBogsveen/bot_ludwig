@@ -10,10 +10,10 @@ yaml-rust = "0.4.4"
 random = "*"
 reqwest = "*"
 serde_json = "*"
-songbird = { version = "*", features = ["builtin-queue"]}
+songbird = { version = "*", features = ["builtin-queue", "yt-dlp"]}
 rspotify = "*"
 #lib-rddit-v3 = { git = "https://git.lgjt.xyz/Johannes/lib-rddit.git" }
-poise = "0.4.1"
+poise = "*"
 
 
 [dependencies.tokio]
