@@ -21,21 +21,13 @@
  *   SOFTWARE.
  */
 
-use lib_rddit_v3::{url_builder, http};
-use serenity::{
-    client::{Context},
-    framework::{
-        standard::{
-            macros::{command},
-            CommandResult, Args,
-        },
-    },
-    model::{channel::Message},
-};
+use std::env::Args;
 
-use crate::{math, reddit, user::{User, save_users}, perms::{Permission, PermsAccount, PermsContainer}, AnswerContainer};
+use librddit::{url_builder, http};
 
-#[command]
+use crate::{Context, Error};
+
+/*#[command]
 pub async fn help(ctx: &Context, msg: &Message) -> CommandResult {
     let data = ctx.data.read().await;
     let answers = data.get::<AnswerContainer>().unwrap();
@@ -51,10 +43,10 @@ pub async fn help(ctx: &Context, msg: &Message) -> CommandResult {
         )) 
     }).await.unwrap();
     Ok(())
-}
+}*/
 
-#[command]
-pub async fn reddit(ctx: &Context, message: &Message, mut args: Args) -> CommandResult {
+#[poise::command(slash_command, prefix_command)]
+pub async fn reddit(ctx: Context<'_>, message: &poise::serenity_prelude::Message, mut args: Args) -> Result<(), Error> {
 
     message.channel_id.broadcast_typing(&ctx.http).await.unwrap();
 
@@ -134,7 +126,7 @@ pub async fn reddit(ctx: &Context, message: &Message, mut args: Args) -> Command
     Ok(())
 }
 
-#[command]
+/*#[command]
 pub async fn math(ctx: &Context, message: &Message, mut args: Args) -> CommandResult {
     let mut equation = String::new();
     for word in args.iter::<String>() {
@@ -148,4 +140,4 @@ pub async fn math(ctx: &Context, message: &Message, mut args: Args) -> CommandRe
 
 
     Ok(())
-}
+}*/

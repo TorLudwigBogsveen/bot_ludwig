@@ -25,13 +25,14 @@ mod music;
 mod spotify;
 mod soundboard;
 mod sound;
+//mod cmds;
 
 use music::*;
 use sound::{join, leave};
 use soundboard::sb_test;
 use spotify::*;
 
-use poise::{serenity_prelude as serenity, PrefixFrameworkOptions};
+use poise::{serenity_prelude::{self as serenity, FullEvent}, PrefixFrameworkOptions, FrameworkOptions, Framework};
 use songbird::SerenityInit;
 
 
@@ -47,42 +48,59 @@ pub async fn register(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
+pub async fn listener(
+    //	ctx: &serenity::Context,
+        event: &FullEvent,
+        _framework: poise::FrameworkContext<'_, Data, Error>,
+        _data: &Data
+    ) -> Result<(), Error> {
+        match event {
+            FullEvent::Ready { ctx: _, data_about_bot } => {
+                println!("{} is connected!", data_about_bot.user.name);
+            },
+            FullEvent::VoiceStateUpdate { ctx, old: _, new } => {
+                if new.channel_id.is_none() {
+                    let sb = songbird::get(ctx).await.expect("No songbird initialised").clone();
+                    match sb.get(new.guild_id.unwrap()) {
+                        Some(c) => {
+                            let mut call = c.lock().await;
+                            call.queue().stop();
+                            call.leave().await?;
+                        },
+                        None => {
+                            println!("No call on dc");
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+        //println!("{:?}",event);
+        Ok(())
+    }
+    
+
 #[tokio::main]
 async fn main() {
     let intents = serenity::GatewayIntents::non_privileged() | serenity::GatewayIntents::MESSAGE_CONTENT | serenity::GatewayIntents::GUILD_VOICE_STATES | serenity::GatewayIntents::GUILD_EMOJIS_AND_STICKERS;
     let mut prefix = PrefixFrameworkOptions::default();
     prefix.prefix = Some(String::from("-"));
 
-    let framework = poise::Framework::builder()
-        .client_settings(|b| {b.register_songbird()})
-        .options(poise::FrameworkOptions {
+    let framework = Framework::new(
+        FrameworkOptions {
             commands: vec![register(), join(), play(), skip(), queue(), leave(), find_song(), spotify_test(), spotify_playlist(), sb_test()],
+            listener: |event, framework, data| {
+                Box::pin(listener(event, framework, data))
+            },
             prefix_options: prefix,
             ..Default::default()
-        })
-        //.token(std::env::var("DISCORD_BOT_TOKEN").expect("missing DISCORD_TOKEN"))
-        .token("")
-        .intents(intents)
-        .user_data_setup(move |_ctx, _ready, _framework| Box::pin(async move { Ok(Data {}) }))
-        .build()
+        },
+        move |_ctx, _ready, _framework| Box::pin(async move { Ok(Data {}) })
+    );
+    let mut client = serenity::Client::builder(String::from("NzU1NDM5ODA3MDM1MDgwODM1.GEmjg5.GPru537lOU1nLyRY0SD874njfIJ2WCrEI6uh0E"), intents)
+        .framework(framework)
+        .register_songbird()
         .await
-        .expect("Error building framework")
-        .start_with(|mut client| async move {
-            let shard_manager = client.shard_manager.clone();
-            tokio::spawn(async move {
-                tokio::signal::ctrl_c()
-                    .await
-                    .expect("Could not register ctrl+c handler");
-                println!("Shutting down...");
-                shard_manager.lock().await.shutdown_all().await;
-            });
-
-            client.start().await
-        })
-        .await
-        .expect("Error starting client");
-
-    /*if let Err(why) = framework.run().await {
-        println!("Client error: {:?}", why);
-    }*/
+        .unwrap();
+    client.start_autosharded().await.unwrap();
 }

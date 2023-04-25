@@ -45,12 +45,14 @@ pub async fn internal_join(
 ) -> Result<(), Error> {
     println!("{} used join", ctx.author().name);
     
-    let guild = ctx.guild().unwrap();
-    let guild_id = guild.id;
-
-    let channel_id = guild
+    let channel_id = {
+        let guild = ctx.guild().unwrap();
+        guild
         .voice_states.get(&ctx.author().id)
-        .and_then(|voice_state| voice_state.channel_id);
+        .and_then(|voice_state| voice_state.channel_id)
+    };
+
+    let guild_id = ctx.guild_id().unwrap();
 
     let connect_to = match channel_id {
         Some(channel) => channel,
@@ -97,8 +99,7 @@ pub async fn leave(
 ) -> Result<(), Error> {
     println!("{} used leave", ctx.author().name);
 
-    let guild = ctx.guild().unwrap();
-    let guild_id = guild.id;
+    let guild_id = ctx.guild_id().unwrap();
 
     let manager = songbird::get(ctx.discord()).await
         .expect("Songbird Voice client placed in at initialisation.").clone();
@@ -116,12 +117,11 @@ pub async fn leave(
     Ok(())
 }
 
-pub async fn internal_enqueue_sources(
+pub async fn internal_enqueue_source(
     ctx: Context<'_>,
-    sources: Vec<Input>,
-) -> Result<Vec<TrackHandle>, Error> {
-    let guild = ctx.guild().unwrap();
-    let guild_id = guild.id;
+    source: Input,
+) -> Result<TrackHandle, Error> {
+    let guild_id = ctx.guild_id().unwrap();
 
     let manager = songbird::get(ctx.discord()).await
         .expect("Songbird Voice client placed in at initialisation.").clone();
@@ -132,18 +132,8 @@ pub async fn internal_enqueue_sources(
 
     if let Some(handler_lock) = manager.get(guild_id) {
         let mut handler = handler_lock.lock().await;
-        
-        Ok(sources.into_iter().map(|source| handler.enqueue_source(source)).collect())
+        Ok(handler.enqueue_input(source).await)
     } else {
         Err(Box::new(SoundError::UserNotInChannel(ctx.author().name.clone())))
     }
-}
-
-pub async fn internal_enqueue_source(
-    ctx: Context<'_>,
-    source: Input,
-) -> Result<TrackHandle, Error> {
-    let t = internal_enqueue_sources(ctx, vec![source]).await.map(|mut tracks| tracks.remove(0))?;
-    t.set_volume(1.0)?;
-    Ok(t)
 }

@@ -1,7 +1,7 @@
 use poise::futures_util::{TryStreamExt, StreamExt};
 use rspotify::{ClientCredsSpotify, Credentials, clients::BaseClient, model::{PlaylistItem, PlaylistId}, prelude::Id};
 
-use crate::{Context, Error, music::internal_play_many};
+use crate::{Context, Error, sound::internal_enqueue_source, music::internal_play};
 
 const ID: &str = "604111fe6a2d4ce880876b857bc6087b";
 const SECRET: &str = "4c0be7d9af594303a21f5978d59dca94";
@@ -27,7 +27,7 @@ pub async fn find_song(
 
     let result = spotify.search(
         &song,
-        &rspotify::model::SearchType::Track,
+        rspotify::model::SearchType::Track,
         None,
         None,
         Some(1),
@@ -50,7 +50,7 @@ pub async fn spotify_playlist(
     println!("[{}]", playlist);
 
     let id = PlaylistId::from_id(&playlist)?;
-    let playlist = spotify.playlist(&id, None, None).await?;
+    let playlist = spotify.playlist(id, None, None).await?;
     let mut tracks = vec![];
     for track in playlist.tracks.items {
         match track.track.unwrap() {
@@ -62,7 +62,8 @@ pub async fn spotify_playlist(
         }
     }
 
-    internal_play_many(ctx, tracks).await?;
-
+    for track in tracks {
+        internal_play(ctx, track).await?;
+    }
     Ok(())
 }

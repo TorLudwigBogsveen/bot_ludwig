@@ -20,47 +20,73 @@
  *   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  *   SOFTWARE.
  */
-use songbird::{input::ytdl_search};
 
-use crate::{Context, Error, sound::{internal_enqueue_source, internal_enqueue_sources}};
+use songbird::input::{YoutubeDl, Compose};
 
-pub async fn internal_play_many(
+use crate::{Context, Error, sound::internal_enqueue_source};
+
+pub async fn internal_play(
     ctx: Context<'_>,
-    songs: Vec<String>,
+    song: String,
 ) -> Result<(), Error> {
-    let mut sources = Vec::new();
-    for url in &songs {
-        let source = if url.starts_with("http") || url.starts_with("https") {
-            match songbird::ytdl(&url).await {
-                Ok(source) => source,
-                Err(why) => {
-                    println!("Err starting source: {:?}", why);
+    let _t = ctx.defer_or_broadcast().await?;
 
-                    ctx.say("Error sourcing ffmpeg").await?;
+    let url = song;
+    let mut source = if url.starts_with("http") || url.starts_with("https") {
+        YoutubeDl::new_ytdl_like("yt-dlp", reqwest::Client::new(), url)  
+    } else {
+        YoutubeDl::new_ytdl_like("yt-dlp", reqwest::Client::new(), format!("ytsearch:{url}"))
+    };
+    let meta: songbird::input::AuxMetadata = source.aux_metadata().await?;
+    let url = meta.source_url.unwrap();
+    let title = meta.title.as_ref().unwrap().clone();
 
-                    return Ok(());
-                },
-            }
-        } else {
-            //println!("url:{}", &url);
-            match ytdl_search(&url).await {
-                Ok(source) => source,
-                Err(why) => {
-                    println!("Err starting source: {:?}", why);
+    internal_enqueue_source(ctx, source.into()).await?;
 
-                    ctx.say("Error sourcing ffmpeg").await?;
+    println!("{} added \"{}\" to the queue{}", ctx.author().name, title, url);
+    ctx.say(&format!("Added \"{}\" to the queue.\n{}", title, url)).await.unwrap();
+    Ok(())
+}
 
-                    return Ok(());
-                },
-            }
-        };
-        sources.push(source);
-        //ctx.say(&format!("Added \"{}\" to the queue.\n{}", title, url)).await.unwrap();
+
+#[poise::command(
+    slash_command,
+    guild_only,
+)]
+pub async fn play_2(
+    ctx: Context<'_>,
+    #[description = "Song"] song: String, // Here description is text attached to the command arguement description
+) -> Result<(), Error> {
+    let _data = ctx.data();
+    let guild_id = if let Some(guild) = ctx.guild_id() {guild} else {return Ok(());};
+    
+    let sb = songbird::get(ctx.discord()).await.expect("No songbird initialised").clone();
+
+    let handler_lock = sb.get(guild_id).unwrap();
+    let mut handler = handler_lock.lock().await;
+
+    let mut src = match false {
+        true => YoutubeDl::new_ytdl_like("yt-dlp", reqwest::Client::new(), song),
+        false => YoutubeDl::new_ytdl_like("yt-dlp", reqwest::Client::new(), format!("ytsearch:{song}")),
+    };
+    println!("{src:?}");
+    let meta = src.aux_metadata().await;
+    let track = handler.enqueue_input(src.into()).await;
+    let mut typemap = track.typemap().write().await;
+    match meta {
+        Ok(m) => {
+            let thumbnail = &m.thumbnail;
+            let title = &m.title;
+            let source_url = &m.source_url;
+            let requestor = ctx.author();
+            let duration = &m.duration;
+        },
+        Err(e) => {
+            println!("Couldnt find metadata");
+            println!("{e:?}");
+        }
+
     }
-
-    let s = internal_enqueue_sources(ctx, sources).await?;
-
-    ctx.say(&format!("Added {} songs to the queue.", s.len())).await?;
     Ok(())
 }
 
@@ -72,39 +98,21 @@ pub async fn play(
     let _t = ctx.defer_or_broadcast().await?;
 
     let url = song;
-    let source = if url.starts_with("http") || url.starts_with("https") {
-        match songbird::ytdl(&url).await {
-            Ok(source) => source,
-            Err(why) => {
-                println!("Err starting source, url: \"{}\", reason: {:?}", &url, why);
-
-                ctx.say("Error sourcing ffmpeg").await.unwrap();
-
-                return Ok(());
-            },
-        }
+    let mut source = if url.starts_with("http") || url.starts_with("https") {
+        YoutubeDl::new_ytdl_like("yt-dlp", reqwest::Client::new(), url)  
     } else {
-        match ytdl_search(&url).await {
-            Ok(source) => source,
-            Err(why) => {
-                println!("Err starting source, url: \"{}\", reason: {:?}", &url, why);
-
-                ctx.say("Error sourcing ffmpeg").await.unwrap();
-
-                return Ok(());
-            },
-        }
+        YoutubeDl::new_ytdl_like("yt-dlp", reqwest::Client::new(), format!("ytsearch:{url}"))
     };
-    let url = source.metadata.source_url.as_ref().unwrap().clone();
-    let title = source.metadata.title.as_ref().unwrap().clone();
+    let meta: songbird::input::AuxMetadata = source.aux_metadata().await?;
+    let url = meta.source_url.unwrap();
+    let title = meta.title.as_ref().unwrap().clone();
 
-    internal_enqueue_source(ctx, source).await?;
+    internal_enqueue_source(ctx, source.into()).await?;
 
     println!("{} added \"{}\" to the queue{}", ctx.author().name, title, url);
     ctx.say(&format!("Added \"{}\" to the queue.\n{}", title, url)).await.unwrap();
     Ok(())
 }
-
 
 #[poise::command(slash_command, prefix_command)]
 pub async fn skip(
@@ -117,8 +125,7 @@ pub async fn skip(
         1
     };
 
-    let guild = ctx.guild().unwrap();
-    let guild_id = guild.id;
+    let guild_id = ctx.guild_id().unwrap();
 
     let manager = songbird::get(ctx.discord()).await
         .expect("Songbird Voice client placed in at initialisation.").clone();
@@ -145,8 +152,7 @@ pub async fn skip(
 pub async fn queue(
     ctx: Context<'_>,
 ) -> Result<(), Error> {
-    let guild = ctx.guild().unwrap();
-    let guild_id = guild.id;
+    let guild_id = ctx.guild_id().unwrap();
 
     let manager = songbird::get(ctx.discord()).await
         .expect("Songbird Voice client placed in at initialisation.").clone();
@@ -158,7 +164,9 @@ pub async fn queue(
         .iter()
         .enumerate()
         .map(|(i, track)| 
-            format!("{}\t:\t\"{}\"\n", i+1, track.metadata().title.as_ref().unwrap())
+            {
+                format!("{}\t:\t\"{}\"\n", i+1, todo!())
+            }
         )
         .collect::<Vec<String>>().concat();
 
