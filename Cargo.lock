@@ -332,9 +332,9 @@ dependencies = [
 
 [[package]]
 name = "darling"
-version = "0.14.2"
+version = "0.14.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0dd3cd20dc6b5a876612a6e5accfe7f3dd883db6d07acfbf14c128f61550dfa"
+checksum = "7b750cb3417fd1b327431a470f388520309479ab0bf5e323505daf0290cd3850"
 dependencies = [
  "darling_core",
  "darling_macro",
@@ -342,9 +342,9 @@ dependencies = [
 
 [[package]]
 name = "darling_core"
-version = "0.14.2"
+version = "0.14.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a784d2ccaf7c98501746bf0be29b2022ba41fd62a2e622af997a03e9f972859f"
+checksum = "109c1ca6e6b7f82cc233a97004ea8ed7ca123a9af07a8230878fcfda9b158bf0"
 dependencies = [
  "fnv",
  "ident_case",
@@ -356,9 +356,9 @@ dependencies = [
 
 [[package]]
 name = "darling_macro"
-version = "0.14.2"
+version = "0.14.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7618812407e9402654622dd402b0a89dff9ba93badd6540781526117b92aab7e"
+checksum = "a4aab4dbc9f7611d8b55048a3a16d2d010c2c8334e46304b40ac1cc14bf3b48e"
 dependencies = [
  "darling_core",
  "quote",
@@ -1192,9 +1192,9 @@ dependencies = [
 
 [[package]]
 name = "poise"
-version = "0.4.1"
+version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aee439543df35482730552e7c9ed0c45a5f1d521548e6c0249967c4ba8828f60"
+checksum = "b9d772f88c48e0f9cd1189ffaff8565ae2b510d36b5406804940958c86684746"
 dependencies = [
  "async-trait",
  "derivative",
@@ -1211,9 +1211,9 @@ dependencies = [
 
 [[package]]
 name = "poise_macros"
-version = "0.4.0"
+version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "53d21213ff7aeef5ab69729a5cddfb351a84a9bf3dadf9f470032440d43746c2"
+checksum = "d6133dbdec6e002adc7323e93daff4079aaf67af6a52f115a8fec10bd7b21180"
 dependencies = [
  "darling",
  "proc-macro2",

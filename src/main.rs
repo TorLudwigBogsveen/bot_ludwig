@@ -24,8 +24,10 @@
 mod music;
 mod spotify;
 mod soundboard;
+mod sound;
 
 use music::*;
+use sound::{join, leave};
 use soundboard::sb_test;
 use spotify::*;
 
@@ -52,18 +54,35 @@ async fn main() {
     prefix.prefix = Some(String::from("-"));
 
     let framework = poise::Framework::builder()
+        .client_settings(|b| {b.register_songbird()})
         .options(poise::FrameworkOptions {
             commands: vec![register(), join(), play(), skip(), queue(), leave(), find_song(), spotify_test(), spotify_playlist(), sb_test()],
             prefix_options: prefix,
             ..Default::default()
         })
         //.token(std::env::var("DISCORD_BOT_TOKEN").expect("missing DISCORD_TOKEN"))
-        .token("NzU1NDM5ODA3MDM1MDgwODM1.GOVTgS.LOd6awZfm61S4GkH5SNgZFrn2czuz7Mx_McuiA")
+        .token("")
         .intents(intents)
-        .client_settings(|builder| builder.register_songbird())
-        .user_data_setup(move |_ctx, _ready, _framework| Box::pin(async move { Ok(Data {}) }));
+        .user_data_setup(move |_ctx, _ready, _framework| Box::pin(async move { Ok(Data {}) }))
+        .build()
+        .await
+        .expect("Error building framework")
+        .start_with(|mut client| async move {
+            let shard_manager = client.shard_manager.clone();
+            tokio::spawn(async move {
+                tokio::signal::ctrl_c()
+                    .await
+                    .expect("Could not register ctrl+c handler");
+                println!("Shutting down...");
+                shard_manager.lock().await.shutdown_all().await;
+            });
 
-    if let Err(why) = framework.run().await {
+            client.start().await
+        })
+        .await
+        .expect("Error starting client");
+
+    /*if let Err(why) = framework.run().await {
         println!("Client error: {:?}", why);
-    }
+    }*/
 }

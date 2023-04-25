@@ -22,125 +22,45 @@
  */
 use songbird::{input::ytdl_search};
 
-use crate::{Context, Error};
-
-pub async fn internal_join(
-    ctx: Context<'_>,
-) -> Result<(), Error> {
-    println!("{} used join", ctx.author().name);
-    ctx.say("Trying to join voice channel").await?;
-
-
-    let guild = ctx.guild().unwrap();
-    let guild_id = guild.id;
-
-    let channel_id = guild
-        .voice_states.get(&ctx.author().id)
-        .and_then(|voice_state| voice_state.channel_id);
-
-    let connect_to = match channel_id {
-        Some(channel) => channel,
-        None => {
-            ctx.say("Not in a voice channel").await?;
-            return Ok(());
-        }
-    };
-
-    let manager = songbird::get(ctx.discord()).await
-        .expect("Songbird Voice client placed in at initialisation.").clone();
-
-    let _handler = manager.join(guild_id, connect_to).await;
-
-    ctx.say("Joined voice channel").await?;
-
-    Ok(())
-}
-
-#[poise::command(slash_command, prefix_command)]
-pub async fn join(
-    ctx: Context<'_>,
-) -> Result<(), Error> {
-    internal_join(ctx).await
-}
-    
-
-#[poise::command(slash_command, prefix_command)]
-pub async fn leave(
-    ctx: Context<'_>,
-) -> Result<(), Error> {
-    println!("{} used leave", ctx.author().name);
-
-    let guild = ctx.guild().unwrap();
-    let guild_id = guild.id;
-
-    let manager = songbird::get(ctx.discord()).await
-        .expect("Songbird Voice client placed in at initialisation.").clone();
-    let has_handler = manager.get(guild_id).is_some();
-
-    if has_handler {
-        if let Err(e) = manager.remove(guild_id).await {
-            ctx.say(format!("Failed: {:?}", e)).await.unwrap();
-        }
-        
-        ctx.say("Left voice channel").await.unwrap();
-    } else {
-        ctx.say("Not in a voice channel").await.unwrap();
-    }
-    Ok(())
-}
+use crate::{Context, Error, sound::{internal_enqueue_source, internal_enqueue_sources}};
 
 pub async fn internal_play_many(
     ctx: Context<'_>,
     songs: Vec<String>,
 ) -> Result<(), Error> {
-    let guild = ctx.guild().unwrap();
-    let guild_id = guild.id;
+    let mut sources = Vec::new();
+    for url in &songs {
+        let source = if url.starts_with("http") || url.starts_with("https") {
+            match songbird::ytdl(&url).await {
+                Ok(source) => source,
+                Err(why) => {
+                    println!("Err starting source: {:?}", why);
 
-    let manager = songbird::get(ctx.discord()).await
-        .expect("Songbird Voice client placed in at initialisation.").clone();
-    let has_handler = manager.get(guild_id).is_some();
-    if !has_handler {
-        internal_join(ctx).await.unwrap();
+                    ctx.say("Error sourcing ffmpeg").await?;
+
+                    return Ok(());
+                },
+            }
+        } else {
+            //println!("url:{}", &url);
+            match ytdl_search(&url).await {
+                Ok(source) => source,
+                Err(why) => {
+                    println!("Err starting source: {:?}", why);
+
+                    ctx.say("Error sourcing ffmpeg").await?;
+
+                    return Ok(());
+                },
+            }
+        };
+        sources.push(source);
+        //ctx.say(&format!("Added \"{}\" to the queue.\n{}", title, url)).await.unwrap();
     }
 
-    let manager = songbird::get(ctx.discord()).await
-        .expect("Songbird Voice client placed in at initialisation.").clone();
+    let s = internal_enqueue_sources(ctx, sources).await?;
 
-    if let Some(handler_lock) = manager.get(guild_id) {
-        let mut handler = handler_lock.lock().await;
-        for url in &songs {
-            let source = if url.starts_with("http") || url.starts_with("https") {
-                match songbird::ytdl(&url).await {
-                    Ok(source) => source,
-                    Err(why) => {
-                        println!("Err starting source: {:?}", why);
-
-                        ctx.say("Error sourcing ffmpeg").await.unwrap();
-
-                        return Ok(());
-                    },
-                }
-            } else {
-                //println!("url:{}", &url);
-                match ytdl_search(&url).await {
-                    Ok(source) => source,
-                    Err(why) => {
-                        println!("Err starting source: {:?}", why);
-
-                        ctx.say("Error sourcing ffmpeg").await.unwrap();
-
-                        return Ok(());
-                    },
-                }
-            };
-            handler.enqueue_source(source);
-
-            //ctx.say(&format!("Added \"{}\" to the queue.\n{}", title, url)).await.unwrap();
-        }
-    } else {
-        ctx.say("Not in a voice channel to play in").await.unwrap();
-    }
-    ctx.say(&format!("Added {} songs to the queue.", songs.len())).await.unwrap();
+    ctx.say(&format!("Added {} songs to the queue.", s.len())).await?;
     Ok(())
 }
 
@@ -149,52 +69,39 @@ pub async fn play(
     ctx: Context<'_>,
     #[description = "Song title or yt-link"] song: String,
 ) -> Result<(), Error> {
+    let _t = ctx.defer_or_broadcast().await?;
+
     let url = song;
+    let source = if url.starts_with("http") || url.starts_with("https") {
+        match songbird::ytdl(&url).await {
+            Ok(source) => source,
+            Err(why) => {
+                println!("Err starting source, url: \"{}\", reason: {:?}", &url, why);
 
-    let guild = ctx.guild().unwrap();
-    let guild_id = guild.id;
+                ctx.say("Error sourcing ffmpeg").await.unwrap();
 
-    let manager = songbird::get(ctx.discord()).await
-        .expect("Songbird Voice client placed in at initialisation.").clone();
-    let has_handler = manager.get(guild_id).is_some();
-    if !has_handler {
-        internal_join(ctx).await.unwrap();
-    }
-
-    if let Some(handler_lock) = manager.get(guild_id) {
-        let mut handler = handler_lock.lock().await;
-        let source = if url.starts_with("http") || url.starts_with("https") {
-            match songbird::ytdl(&url).await {
-                Ok(source) => source,
-                Err(why) => {
-                    println!("Err starting source, url: \"{}\", reason: {:?}", &url, why);
-
-                    ctx.say("Error sourcing ffmpeg").await.unwrap();
-
-                    return Ok(());
-                },
-            }
-        } else {
-            match ytdl_search(&url).await {
-                Ok(source) => source,
-                Err(why) => {
-                    println!("Err starting source, url: \"{}\", reason: {:?}", &url, why);
-
-                    ctx.say("Error sourcing ffmpeg").await.unwrap();
-
-                    return Ok(());
-                },
-            }
-        };
-        let url = source.metadata.source_url.as_ref().unwrap().clone();
-        let title = source.metadata.title.as_ref().unwrap().clone();
-        handler.enqueue_source(source);
-
-        println!("{} added \"{}\" to the queue{}", ctx.author().name, title, url);
-        ctx.say(&format!("Added \"{}\" to the queue.\n{}", title, url)).await.unwrap();
+                return Ok(());
+            },
+        }
     } else {
-        ctx.say("Not in a voice channel to play in").await.unwrap();
-    }
+        match ytdl_search(&url).await {
+            Ok(source) => source,
+            Err(why) => {
+                println!("Err starting source, url: \"{}\", reason: {:?}", &url, why);
+
+                ctx.say("Error sourcing ffmpeg").await.unwrap();
+
+                return Ok(());
+            },
+        }
+    };
+    let url = source.metadata.source_url.as_ref().unwrap().clone();
+    let title = source.metadata.title.as_ref().unwrap().clone();
+
+    internal_enqueue_source(ctx, source).await?;
+
+    println!("{} added \"{}\" to the queue{}", ctx.author().name, title, url);
+    ctx.say(&format!("Added \"{}\" to the queue.\n{}", title, url)).await.unwrap();
     Ok(())
 }
 
