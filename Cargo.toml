@@ -9,7 +9,6 @@ version = "0.5.2"
 features = ["aac", "mp3", "isomp4", "alac", "mkv"]
 
 [dependencies]
-yaml-rust = "0.4.4"
 random = "*"
 reqwest = "0.11"
 serde_json = "*"
