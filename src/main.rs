@@ -29,7 +29,7 @@ mod sound;
 
 use music::*;
 use sound::{join, leave};
-use soundboard::sb_test;
+use soundboard::{sb_test, SoundBoard};
 use spotify::*;
 
 use poise::{serenity_prelude::{self as serenity, FullEvent}, PrefixFrameworkOptions, FrameworkOptions, Framework};
@@ -38,7 +38,10 @@ use songbird::SerenityInit;
 
 pub struct Handler;
 
-pub struct Data {} // User data, which is stored and accessible in all command invocations
+pub struct Data {
+    soundboard: SoundBoard,
+} // User data, which is stored and accessible in all command invocations
+
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
 
@@ -95,7 +98,7 @@ async fn main() {
             prefix_options: prefix,
             ..Default::default()
         },
-        move |_ctx, _ready, _framework| Box::pin(async move { Ok(Data {}) })
+        move |_ctx, _ready, _framework| Box::pin(async move { Ok(Data { soundboard: SoundBoard::load()}) })
     );
     let mut client = serenity::Client::builder(String::from("NzU1NDM5ODA3MDM1MDgwODM1.GEmjg5.GPru537lOU1nLyRY0SD874njfIJ2WCrEI6uh0E"), intents)
         .framework(framework)

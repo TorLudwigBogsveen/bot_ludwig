@@ -1,6 +1,21 @@
-use songbird::input::{cached::Memory, File};
+use songbird::input::{cached::Memory, File, Input};
 
 use crate::{sound, Context, Error};
+
+pub struct Sound {
+    name: String,
+    //input: Input,
+}
+
+pub struct SoundBoard {
+    sounds: Vec<Sound>
+}
+
+impl SoundBoard {
+    pub fn load() -> SoundBoard {
+        SoundBoard { sounds: Vec::new() }
+    }
+}
 
 #[poise::command(slash_command, prefix_command)]
 pub async fn sb_test(ctx: Context<'_>) -> Result<(), Error> {
