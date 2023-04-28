@@ -21,14 +21,19 @@
  *   SOFTWARE.
  */
 
-use songbird::{input::Input, tracks::TrackHandle};
+use std::{io::ErrorKind};
+
+use serde_json::from_slice;
+use songbird::{input::{Input, AudioStreamError, YoutubeDl, Compose, AuxMetadata}, tracks::TrackHandle};
+use tokio::process::Command;
 
 use crate::{Context, Error};
 
 
 #[derive(Debug)]
-enum SoundError {
+pub enum SoundError {
     UserNotInChannel(String),
+    SoundCouldNotBeLoaded,
 }
 
 impl std::fmt::Display for SoundError {
@@ -38,6 +43,50 @@ impl std::fmt::Display for SoundError {
 }
 
 impl std::error::Error for SoundError {}
+
+pub async fn download_sound_metadata(url: &str) -> Result<AuxMetadata, AudioStreamError>{
+    let mut source = YoutubeDl::new_ytdl_like("yt-dlp", reqwest::Client::new(), url.to_owned());
+    source.aux_metadata().await
+}
+
+pub async fn download_sound(url: &str, name: &str) -> Result<(), AudioStreamError> {
+    let program = "yt-dlp";
+
+    let ytdl_args = [
+        url,
+        "-f",
+        //"'ba[abr>0][vcodec=none]/best'",
+        "ba",
+        "--no-playlist",
+        "-x",
+        "-P",
+        "sounds",
+        "-o",
+        name,
+        "--audio-format",
+        "mp3",
+    ];
+
+    /*let a = ytdl_args.concat();
+    println!("{program} {a}");*/
+
+    let _output = Command::new(program)
+        .args(ytdl_args)
+        .output()
+        .await
+        .map_err(|e| {
+            AudioStreamError::Fail(if e.kind() == ErrorKind::NotFound {
+                format!("could not find executable '{}' on path", program).into()
+            } else {
+                Box::new(e)
+            })
+        })?;
+    /*println!("stderr of ls: {:?}", std::str::from_utf8(&output.stderr[..]));
+    println!("stdout of ls: {:?}", std::str::from_utf8(&output.stdout[..]));
+    println!("status of ls: {:?}", output.status);*/
+    
+    Ok(())
+}
 
 
 pub async fn internal_join(
@@ -73,7 +122,7 @@ pub async fn internal_join(
 pub async fn join(
     ctx: Context<'_>,
 ) -> Result<(), Error> {
-    let _t = ctx.defer_or_broadcast().await?;
+    let t = ctx.defer_or_broadcast().await?;
     match internal_join(ctx).await {
         Ok(_) => { ctx.say("Joined voice channel").await?; }
         Err(err) => {
@@ -82,13 +131,14 @@ pub async fn join(
                     SoundError::UserNotInChannel(_) => {
                         ctx.say("You need to be in channel to use this Command").await?;
                     }
+                    _ => panic!()
                 }
             } else {
                 Err(err)?
             }
         }
     }
-    
+    drop(t);
     Ok(())
 }
     

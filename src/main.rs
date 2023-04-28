@@ -27,18 +27,22 @@ mod soundboard;
 mod sound;
 //mod cmds;
 
+use std::sync::Arc;
+
 use music::*;
 use sound::{join, leave};
-use soundboard::sb_test;
+use soundboard::{create_soundboard, SoundBoard, add_sound};
 use spotify::*;
 
-use poise::{serenity_prelude::{self as serenity, FullEvent}, PrefixFrameworkOptions, FrameworkOptions, Framework};
+use poise::{serenity_prelude::{self as serenity, FullEvent}, PrefixFrameworkOptions, FrameworkOptions, Framework, futures_util::lock::Mutex};
 use songbird::SerenityInit;
 
 
 pub struct Handler;
 
-pub struct Data {} // User data, which is stored and accessible in all command invocations
+pub struct Data {
+    soundboard: Arc<Mutex<SoundBoard>>,
+} // User data, which is stored and accessible in all command invocations
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
 
@@ -86,18 +90,20 @@ async fn main() {
     let mut prefix = PrefixFrameworkOptions::default();
     prefix.prefix = Some(String::from("-"));
 
+    let soundboard = Arc::new(Mutex::new(SoundBoard::load().await.unwrap()));
+
     let framework = Framework::new(
         FrameworkOptions {
-            commands: vec![register(), join(), play(), skip(), queue(), leave(), find_song(), spotify_test(), spotify_playlist(), sb_test()],
+            commands: vec![register(), join(), play(), skip(), queue(), leave(), find_song(), spotify_test(), spotify_playlist(), create_soundboard(), add_sound()],
             listener: |event, framework, data| {
                 Box::pin(listener(event, framework, data))
             },
             prefix_options: prefix,
             ..Default::default()
         },
-        move |_ctx, _ready, _framework| Box::pin(async move { Ok(Data {}) })
+        move |_ctx, _ready, _framework| Box::pin(async move { Ok(Data { soundboard }) })
     );
-    let mut client = serenity::Client::builder(String::from("NzU1NDM5ODA3MDM1MDgwODM1.GA-WUa.LGzT2ziGOzmaBtWYfxuoayMkZr2P0MXPwo3p1E"), intents)
+    let mut client = serenity::Client::builder(String::from(""), intents)
         .framework(framework)
         .register_songbird()
         .await

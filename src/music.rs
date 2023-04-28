@@ -29,64 +29,21 @@ pub async fn internal_play(
     ctx: Context<'_>,
     song: String,
 ) -> Result<(), Error> {
-    let _t = ctx.defer_or_broadcast().await?;
+    let t = ctx.defer_or_broadcast().await?;
 
     let url = song;
     let mut source = if url.starts_with("http") || url.starts_with("https") {
-        YoutubeDl::new_ytdl_like("yt-dlp", reqwest::Client::new(), url)  
+        YoutubeDl::new_ytdl_like("yt-dlp", reqwest::Client::new(), url) 
     } else {
         YoutubeDl::new_ytdl_like("yt-dlp", reqwest::Client::new(), format!("ytsearch:{url}"))
     };
     let meta: songbird::input::AuxMetadata = source.aux_metadata().await?;
     let url = meta.source_url.unwrap();
     let title = meta.title.as_ref().unwrap().clone();
-
     internal_enqueue_source(ctx, source.into()).await?;
-
     println!("{} added \"{}\" to the queue{}", ctx.author().name, title, url);
     ctx.say(&format!("Added \"{}\" to the queue.\n{}", title, url)).await.unwrap();
-    Ok(())
-}
-
-
-#[poise::command(
-    slash_command,
-    guild_only,
-)]
-pub async fn play_2(
-    ctx: Context<'_>,
-    #[description = "Song"] song: String, // Here description is text attached to the command arguement description
-) -> Result<(), Error> {
-    let _data = ctx.data();
-    let guild_id = if let Some(guild) = ctx.guild_id() {guild} else {return Ok(());};
-    
-    let sb = songbird::get(ctx.discord()).await.expect("No songbird initialised").clone();
-
-    let handler_lock = sb.get(guild_id).unwrap();
-    let mut handler = handler_lock.lock().await;
-
-    let mut src = match false {
-        true => YoutubeDl::new_ytdl_like("yt-dlp", reqwest::Client::new(), song),
-        false => YoutubeDl::new_ytdl_like("yt-dlp", reqwest::Client::new(), format!("ytsearch:{song}")),
-    };
-    println!("{src:?}");
-    let meta = src.aux_metadata().await;
-    let track = handler.enqueue_input(src.into()).await;
-    let mut typemap = track.typemap().write().await;
-    match meta {
-        Ok(m) => {
-            let thumbnail = &m.thumbnail;
-            let title = &m.title;
-            let source_url = &m.source_url;
-            let requestor = ctx.author();
-            let duration = &m.duration;
-        },
-        Err(e) => {
-            println!("Couldnt find metadata");
-            println!("{e:?}");
-        }
-
-    }
+    drop(t);
     Ok(())
 }
 
@@ -95,23 +52,7 @@ pub async fn play(
     ctx: Context<'_>,
     #[description = "Song title or yt-link"] song: String,
 ) -> Result<(), Error> {
-    let _t = ctx.defer_or_broadcast().await?;
-
-    let url = song;
-    let mut source = if url.starts_with("http") || url.starts_with("https") {
-        YoutubeDl::new_ytdl_like("yt-dlp", reqwest::Client::new(), url)  
-    } else {
-        YoutubeDl::new_ytdl_like("yt-dlp", reqwest::Client::new(), format!("ytsearch:{url}"))
-    };
-    let meta: songbird::input::AuxMetadata = source.aux_metadata().await?;
-    let url = meta.source_url.unwrap();
-    let title = meta.title.as_ref().unwrap().clone();
-
-    internal_enqueue_source(ctx, source.into()).await?;
-
-    println!("{} added \"{}\" to the queue{}", ctx.author().name, title, url);
-    ctx.say(&format!("Added \"{}\" to the queue.\n{}", title, url)).await.unwrap();
-    Ok(())
+   internal_play(ctx, song).await
 }
 
 #[poise::command(slash_command, prefix_command)]

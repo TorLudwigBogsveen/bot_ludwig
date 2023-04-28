@@ -2,5 +2,5 @@
 
 ## Required Dependencies:
 - FFMPEG
-- YouTube-dl
+- yt-dlp
 - Opus 
