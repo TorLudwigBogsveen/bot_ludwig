@@ -123,6 +123,9 @@ pub async fn create_soundboard(
         let handle = internal_enqueue_source(ctx, soundboard.0.get(&id).unwrap().src.new_handle().into()).await?;
         handle.play()?;
     }
+
+    handle.delete(ctx).await?;
+    
     Ok(())
 }
 

@@ -25,10 +25,11 @@ mod music;
 mod spotify;
 mod soundboard;
 mod sound;
-//mod cmds;
+mod cmds;
 
 use std::sync::Arc;
 
+use cmds::clear;
 use music::*;
 use sound::{join, leave};
 use soundboard::{create_soundboard, SoundBoard, add_sound};
@@ -67,9 +68,10 @@ pub async fn listener(
                     let sb = songbird::get(ctx).await.expect("No songbird initialised").clone();
                     match sb.get(new.guild_id.unwrap()) {
                         Some(c) => {
-                            let mut call = c.lock().await;
-                            call.queue().stop();
-                            call.leave().await?;
+                            //TODO: FIX
+                            //let mut call = c.lock().await;
+                            //call.queue().stop();
+                            //call.leave().await?;
                         },
                         None => {
                             println!("No call on dc");
@@ -94,7 +96,7 @@ async fn main() {
 
     let framework = Framework::new(
         FrameworkOptions {
-            commands: vec![register(), join(), play(), skip(), queue(), leave(), find_song(), spotify_test(), spotify_playlist(), create_soundboard(), add_sound()],
+            commands: vec![register(), clear(), join(), play(), skip(), queue(), leave(), find_song(), spotify_test(), spotify_playlist(), create_soundboard(), add_sound()],
             listener: |event, framework, data| {
                 Box::pin(listener(event, framework, data))
             },
@@ -103,7 +105,7 @@ async fn main() {
         },
         move |_ctx, _ready, _framework| Box::pin(async move { Ok(Data { soundboard }) })
     );
-    let mut client = serenity::Client::builder(String::from(""), intents)
+    let mut client = serenity::Client::builder(String::from("NzU1NDM5ODA3MDM1MDgwODM1.GmlHLk.l8iI5xz1VqowOskpr9-7__jnO8IXpeyRonP-kg"), intents)
         .framework(framework)
         .register_songbird()
         .await

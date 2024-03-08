@@ -24,6 +24,7 @@
 use std::env::Args;
 
 use librddit::{url_builder, http};
+use serenity::builder::GetMessages;
 
 use crate::{Context, Error};
 
@@ -45,7 +46,7 @@ pub async fn help(ctx: &Context, msg: &Message) -> CommandResult {
     Ok(())
 }*/
 
-#[poise::command(slash_command, prefix_command)]
+/*#[poise::command(slash_command, prefix_command)]
 pub async fn reddit(ctx: Context<'_>, message: &poise::serenity_prelude::Message, mut args: Args) -> Result<(), Error> {
 
     message.channel_id.broadcast_typing(&ctx.http).await.unwrap();
@@ -124,7 +125,7 @@ pub async fn reddit(ctx: Context<'_>, message: &poise::serenity_prelude::Message
         }
     }
     Ok(())
-}
+}*/
 
 /*#[command]
 pub async fn math(ctx: &Context, message: &Message, mut args: Args) -> CommandResult {
@@ -141,3 +142,21 @@ pub async fn math(ctx: &Context, message: &Message, mut args: Args) -> CommandRe
 
     Ok(())
 }*/
+
+#[poise::command(slash_command, prefix_command)]
+pub async fn clear(
+    ctx: Context<'_>,
+    #[description="Amount of messages to remove, default 1"] amount: Option<u8>,
+) -> Result<(), Error> {
+    let amount = amount.unwrap_or(1);
+    let _t = ctx.defer_or_broadcast().await?;
+    let channel = ctx.channel_id();
+    let messages = channel.messages(ctx.cache_and_http(), GetMessages::new().limit(amount+1)).await?;
+    let mut messages = messages.into_iter();
+    messages.next();
+    for message in messages {
+        message.delete(ctx.cache_and_http()).await?;
+    }
+    ctx.say(format!("Cleared {} messages", amount)).await?;
+    Ok(())
+}
