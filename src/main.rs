@@ -105,7 +105,7 @@ async fn main() {
         },
         move |_ctx, _ready, _framework| Box::pin(async move { Ok(Data { soundboard }) })
     );
-    let token = std::env::args().next().unwrap();
+    let token = std::env::var("DISCORD_BOT_TOKEN").unwrap();
     let mut client = serenity::Client::builder(token, intents)
         .framework(framework)
         .register_songbird()
