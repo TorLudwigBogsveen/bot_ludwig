@@ -1,6 +1,6 @@
 use std::{collections::HashMap, hash::Hash, time::Duration};
 
-use poise::{CreateReply, serenity_prelude::{CreateButton, CreateActionRow, MessageId}, futures_util::StreamExt};
+use poise::{futures_util::StreamExt, send_reply, serenity_prelude::{CreateActionRow, CreateButton, MessageId}, CreateReply};
 use serde_json::{Value, json, to_writer_pretty};
 use songbird::input::{cached::Memory, File, Input, YoutubeDl, Compose};
 
@@ -104,12 +104,10 @@ pub async fn create_soundboard(
     }
 
     rows.push(CreateActionRow::Buttons(buttons));
-
-    let reply = CreateReply::new()
+    let reply = CreateReply::default()
     .components(rows);
 
-    let handle = ctx.send(reply
-    ).await.unwrap();
+    let handle = send_reply(ctx, reply).await?;
 
     drop(t);
 
@@ -118,7 +116,7 @@ pub async fn create_soundboard(
     handle.message().await?.await_component_interactions(&ctx.discord()).timeout(Duration::from_secs(60 * 3)).stream();
 
     while let Some(interaction) = interaction_stream.next().await {
-        interaction.defer(ctx.cache_and_http()).await?;
+        interaction.defer(ctx).await?;
         let id = interaction.data.custom_id;
         let handle = internal_enqueue_source(ctx, soundboard.0.get(&id).unwrap().src.new_handle().into()).await?;
         handle.play()?;

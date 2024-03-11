@@ -35,7 +35,7 @@ use sound::{join, leave};
 use soundboard::{create_soundboard, SoundBoard, add_sound};
 use spotify::*;
 
-use poise::{serenity_prelude::{self as serenity, FullEvent}, PrefixFrameworkOptions, FrameworkOptions, Framework, futures_util::lock::Mutex};
+use poise::{futures_util::lock::Mutex, serenity_prelude::{self as serenity, FullEvent}, Framework, FrameworkContext, FrameworkOptions, PrefixFrameworkOptions};
 use songbird::SerenityInit;
 
 
@@ -54,16 +54,16 @@ pub async fn register(ctx: Context<'_>) -> Result<(), Error> {
 }
 
 pub async fn listener(
-    //	ctx: &serenity::Context,
+    	ctx: &serenity::Context,
         event: &FullEvent,
         _framework: poise::FrameworkContext<'_, Data, Error>,
         _data: &Data
     ) -> Result<(), Error> {
         match event {
-            FullEvent::Ready { ctx: _, data_about_bot } => {
+            FullEvent::Ready { data_about_bot } => {
                 println!("{} is connected!", data_about_bot.user.name);
             },
-            FullEvent::VoiceStateUpdate { ctx, old: _, new } => {
+            FullEvent::VoiceStateUpdate { old: _, new } => {
                 if new.channel_id.is_none() {
                     let sb = songbird::get(ctx).await.expect("No songbird initialised").clone();
                     match sb.get(new.guild_id.unwrap()) {
@@ -97,15 +97,16 @@ async fn main() {
     let framework = Framework::new(
         FrameworkOptions {
             commands: vec![register(), clear(), join(), play(), skip(), queue(), leave(), find_song(), spotify_test(), spotify_playlist(), create_soundboard(), add_sound()],
-            listener: |event, framework, data| {
-                Box::pin(listener(event, framework, data))
+            event_handler: |ctx, event, framework, data| {
+                Box::pin(listener(ctx, event, framework, data))
             },
             prefix_options: prefix,
             ..Default::default()
         },
         move |_ctx, _ready, _framework| Box::pin(async move { Ok(Data { soundboard }) })
     );
-    let mut client = serenity::Client::builder(String::from("NzU1NDM5ODA3MDM1MDgwODM1.GmlHLk.l8iI5xz1VqowOskpr9-7__jnO8IXpeyRonP-kg"), intents)
+    let token = std::env::args().next().unwrap();
+    let mut client = serenity::Client::builder(token, intents)
         .framework(framework)
         .register_songbird()
         .await

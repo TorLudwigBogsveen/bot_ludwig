@@ -151,11 +151,11 @@ pub async fn clear(
     let amount = amount.unwrap_or(1);
     let _t = ctx.defer_or_broadcast().await?;
     let channel = ctx.channel_id();
-    let messages = channel.messages(ctx.cache_and_http(), GetMessages::new().limit(amount+1)).await?;
+    let messages = channel.messages(ctx, GetMessages::new().limit(amount+1)).await?;
     let mut messages = messages.into_iter();
     messages.next();
     for message in messages {
-        message.delete(ctx.cache_and_http()).await?;
+        message.delete(ctx).await?;
     }
     ctx.say(format!("Cleared {} messages", amount)).await?;
     Ok(())

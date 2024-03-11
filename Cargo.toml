@@ -12,9 +12,9 @@ features = ["aac", "mp3", "isomp4", "alac", "mkv"]
 random = "*"
 reqwest = "0.11"
 serde_json = "*"
-songbird = { features = ["builtin-queue"]}
+songbird = { version = "0.4.0", features = ["builtin-queue"]}
 rspotify = "*"
 librddit = { git = "https://github.com/JohannesThoren/rdditv3.git" }
 poise = { version = "0.6.1", features = ["cache"]}
-tokio = { version = "1.21.2", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "*", features = ["macros", "rt-multi-thread"] }
 serenity = { version = "0.12", features = ["builder","cache","client","gateway","http","model","utils","rustls_backend"]}
